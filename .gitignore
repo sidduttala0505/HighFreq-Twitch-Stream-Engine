@@ -1,0 +1,12 @@
+.gradle/
+build/
+bin/
+
+# IntelliJ
+.idea/
+*.iml
+
+# secrets - never commit these
+.env
+
+.DS_Store
