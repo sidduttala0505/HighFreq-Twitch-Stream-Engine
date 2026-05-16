@@ -1,0 +1,17 @@
+spring:
+  main:
+    web-application-type: none
+    # nothing else holds the JVM open once startup finishes
+    keep-alive: true
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+hype:
+  # lowercase twitch login, no leading '#'
+  channel: caedrel
+
+logging:
+  level:
+    com.sidduttala.hypeclipper: INFO
