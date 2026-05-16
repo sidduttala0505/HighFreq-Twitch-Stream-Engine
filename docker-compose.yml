@@ -1,0 +1,21 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: hype-redis
+    ports:
+      - "6379:6379"
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: hype-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: hypeclipper
+      POSTGRES_USER: hype
+      POSTGRES_PASSWORD: hype
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
