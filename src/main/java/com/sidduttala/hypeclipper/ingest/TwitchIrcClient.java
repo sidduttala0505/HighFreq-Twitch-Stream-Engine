@@ -1,5 +1,6 @@
 package com.sidduttala.hypeclipper.ingest;
 
+import com.sidduttala.hypeclipper.model.ChatEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -8,6 +9,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.util.concurrent.CompletionStage;
+import java.util.function.Consumer;
 
 /**
  * Reads a live channel's chat over Twitch's IRC-over-WebSocket gateway.
@@ -23,22 +25,24 @@ public class TwitchIrcClient {
     private static final String IRC_WS = "wss://irc-ws.chat.twitch.tv:443";
 
     /** channel = lowercase login, e.g. "caedrel" (no leading #). */
-    public void connect(String channel) {
+    public void connect(String channel, Consumer<ChatEvent> onMessage) {
         HttpClient.newHttpClient()
                 .newWebSocketBuilder()
-                .buildAsync(URI.create(IRC_WS), new Listener(channel))
+                .buildAsync(URI.create(IRC_WS), new Listener(channel, onMessage))
                 .join();
     }
 
     static final class Listener implements WebSocket.Listener {
 
         private final String channel;
+        private final Consumer<ChatEvent> onMessage;
 
         /** Twitch can split a frame mid-line, so hold the remainder until last==true. */
         private final StringBuilder buffer = new StringBuilder();
 
-        Listener(String channel) {
+        Listener(String channel, Consumer<ChatEvent> onMessage) {
             this.channel = channel;
+            this.onMessage = onMessage;
         }
 
         @Override
@@ -65,9 +69,15 @@ public class TwitchIrcClient {
             if (line.isEmpty()) {
                 return;
             }
-            // Just dumping raw protocol lines for now so I can see what the
-            // server actually sends before I write a parser for it.
-            log.info("<< {}", line);
+
+            // A chat message looks like:
+            // :user!user@user.tmi.twitch.tv PRIVMSG #channel :the message text
+            int privmsgIdx = line.indexOf(" PRIVMSG ");
+            if (privmsgIdx > 0) {
+                String user = line.substring(1, line.indexOf('!'));
+                String msg = line.substring(line.indexOf(" :", privmsgIdx) + 2);
+                onMessage.accept(new ChatEvent(channel, user, msg, System.currentTimeMillis()));
+            }
         }
     }
 }
