@@ -58,15 +58,23 @@ public class TwitchIrcClient {
             buffer.append(data);
             if (last) {
                 for (String line : buffer.toString().split("\r\n")) {
-                    handleLine(line);
+                    handleLine(ws, line);
                 }
                 buffer.setLength(0);
             }
             return WebSocket.Listener.super.onText(ws, data, last);
         }
 
-        private void handleLine(String line) {
+        private void handleLine(WebSocket ws, String line) {
             if (line.isEmpty()) {
+                return;
+            }
+
+            // Twitch pings every ~5 minutes and drops the connection if you
+            // don't answer. Took me a while to work out that was why the
+            // stream of messages just stopped dead.
+            if (line.startsWith("PING")) {
+                ws.sendText("PONG :tmi.twitch.tv\r\n", true);
                 return;
             }
 
