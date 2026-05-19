@@ -23,16 +23,40 @@ public class TwitchIrcClient {
     private static final Logger log = LoggerFactory.getLogger(TwitchIrcClient.class);
 
     private static final String IRC_WS = "wss://irc-ws.chat.twitch.tv:443";
+    private static final long RECONNECT_DELAY_MS = 3000;
+
+    private final HttpClient http = HttpClient.newHttpClient();
 
     /** channel = lowercase login, e.g. "caedrel" (no leading #). */
     public void connect(String channel, Consumer<ChatEvent> onMessage) {
-        HttpClient.newHttpClient()
-                .newWebSocketBuilder()
+        http.newWebSocketBuilder()
                 .buildAsync(URI.create(IRC_WS), new Listener(channel, onMessage))
                 .join();
     }
 
-    static final class Listener implements WebSocket.Listener {
+    /**
+     * Twitch drops the socket now and then (server restarts, network blips).
+     * Retry forever on a virtual thread - if we're not connected we're not
+     * detecting anything, so giving up is never the right answer.
+     */
+    private void reconnect(String channel, Consumer<ChatEvent> onMessage) {
+        Thread.startVirtualThread(() -> {
+            while (true) {
+                try {
+                    Thread.sleep(RECONNECT_DELAY_MS);
+                    connect(channel, onMessage);
+                    return;
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                } catch (Exception e) {
+                    log.warn("reconnect to #{} failed, trying again: {}", channel, e.getMessage());
+                }
+            }
+        });
+    }
+
+    final class Listener implements WebSocket.Listener {
 
         private final String channel;
         private final Consumer<ChatEvent> onMessage;
@@ -86,6 +110,19 @@ public class TwitchIrcClient {
                 String msg = line.substring(line.indexOf(" :", privmsgIdx) + 2);
                 onMessage.accept(new ChatEvent(channel, user, msg, System.currentTimeMillis()));
             }
+        }
+
+        @Override
+        public CompletionStage<?> onClose(WebSocket ws, int statusCode, String reason) {
+            log.warn("irc socket closed for #{} ({} {}), reconnecting", channel, statusCode, reason);
+            reconnect(channel, onMessage);
+            return null;
+        }
+
+        @Override
+        public void onError(WebSocket ws, Throwable error) {
+            log.warn("irc socket error for #{}: {}", channel, error.getMessage());
+            reconnect(channel, onMessage);
         }
     }
 }
