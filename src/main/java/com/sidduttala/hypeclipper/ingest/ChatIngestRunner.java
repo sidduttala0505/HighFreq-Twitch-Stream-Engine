@@ -1,5 +1,6 @@
 package com.sidduttala.hypeclipper.ingest;
 
+import com.sidduttala.hypeclipper.detect.VelocityTrackingService;
 import com.sidduttala.hypeclipper.model.ChatEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,12 +18,14 @@ public class ChatIngestRunner implements ApplicationRunner {
     private static final Logger log = LoggerFactory.getLogger(ChatIngestRunner.class);
 
     private final TwitchIrcClient irc;
+    private final VelocityTrackingService velocity;
 
     @Value("${hype.channel}")
     private String channel;
 
-    public ChatIngestRunner(TwitchIrcClient irc) {
+    public ChatIngestRunner(TwitchIrcClient irc, VelocityTrackingService velocity) {
         this.irc = irc;
+        this.velocity = velocity;
     }
 
     @Override
@@ -32,6 +35,10 @@ public class ChatIngestRunner implements ApplicationRunner {
     }
 
     private void onChatMessage(ChatEvent event) {
-        log.info("[{}] {}: {}", event.channelId(), event.userId(), event.message());
+        log.debug("[{}] {}: {}", event.channelId(), event.userId(), event.message());
+
+        if (velocity.isSpike(event)) {
+            log.info("SPIKE in #{}", event.channelId());
+        }
     }
 }
