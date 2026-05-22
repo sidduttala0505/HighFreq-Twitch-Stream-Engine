@@ -7,7 +7,9 @@ import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Sliding window of chat message timestamps in a Redis sorted set, scored by
@@ -23,6 +25,9 @@ public class VelocityTrackingService {
     private static final long KEY_TTL_SECONDS = 300;
 
     private final StringRedisTemplate redis;
+
+    /** When we first saw traffic on a channel, so we know when the window is full. */
+    private final Map<String, Long> watchingSince = new ConcurrentHashMap<>();
 
     public VelocityTrackingService(StringRedisTemplate redis) {
         this.redis = redis;
@@ -54,6 +59,14 @@ public class VelocityTrackingService {
 
         long recent5s = asLong(results.get(3));
         long baseline25s = asLong(results.get(4));
+
+        // First run against a busy channel fired on basically every message:
+        // there's no baseline yet, so the first burst of chat looks infinitely
+        // louder than the nothing that came before it. Sit out one window.
+        long since = watchingSince.computeIfAbsent(event.channelId(), c -> now);
+        if (now - since < WINDOW_MS) {
+            return false;
+        }
 
         // Baseline is the 25s *before* the recent slice, not the whole window.
         // Counting the full 30s meant the spike was inside its own baseline:
