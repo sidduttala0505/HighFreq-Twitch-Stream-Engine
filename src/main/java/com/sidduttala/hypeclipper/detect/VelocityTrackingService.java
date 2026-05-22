@@ -48,17 +48,25 @@ public class VelocityTrackingService {
             conn.zSetCommands().zRemRangeByScore(k, 0, windowStart);    // 1: drop anything older than the window
             conn.keyCommands().expire(k, KEY_TTL_SECONDS);              // 2: don't leak keys for dead channels
             conn.zSetCommands().zCount(k, recentStart, now);            // 3: last 5s
-            conn.zSetCommands().zCount(k, windowStart, now);            // 4: the whole 30s
+            conn.zSetCommands().zCount(k, windowStart, recentStart);    // 4: the 25s BEFORE that
             return null;
         });
 
         long recent5s = asLong(results.get(3));
-        long window30s = asLong(results.get(4));
+        long baseline25s = asLong(results.get(4));
 
-        // How many messages a normal 5s slice of this window holds.
-        double expected5s = (window30s / 30.0) * 5.0;
+        // Baseline is the 25s *before* the recent slice, not the whole window.
+        // Counting the full 30s meant the spike was inside its own baseline:
+        // chat goes wild -> baseline goes up too -> ratio never clears 3x and
+        // the loudest moments were the ones it missed.
+        double expected5s = (baseline25s / (double) baselineSeconds()) * RECENT_MS / 1000.0;
 
         return recent5s >= MIN_MESSAGES && recent5s >= SPIKE_MULTIPLIER * Math.max(expected5s, 1.0);
+    }
+
+    /** Length of the baseline period: the window minus the recent slice. */
+    private static long baselineSeconds() {
+        return (WINDOW_MS - RECENT_MS) / 1000;
     }
 
     private static long asLong(Object o) {
