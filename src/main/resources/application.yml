@@ -11,6 +11,11 @@ spring:
 hype:
   # lowercase twitch login, no leading '#'
   channel: caedrel
+  window-seconds: 30
+  recent-seconds: 5
+  min-messages: 10
+  spike-multiplier: 3.0
+  dedup-lock-seconds: 60
 
 logging:
   level:
