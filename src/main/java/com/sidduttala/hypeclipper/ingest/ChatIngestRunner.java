@@ -1,8 +1,11 @@
 package com.sidduttala.hypeclipper.ingest;
 
 import com.sidduttala.hypeclipper.config.HypeProperties;
+import com.sidduttala.hypeclipper.detect.DeduplicationService;
+import com.sidduttala.hypeclipper.detect.SpikeSignal;
 import com.sidduttala.hypeclipper.detect.VelocityTrackingService;
 import com.sidduttala.hypeclipper.model.ChatEvent;
+import com.sidduttala.hypeclipper.notify.DiscordNotifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -19,11 +22,19 @@ public class ChatIngestRunner implements ApplicationRunner {
 
     private final TwitchIrcClient irc;
     private final VelocityTrackingService velocity;
+    private final DeduplicationService dedup;
+    private final DiscordNotifier discord;
     private final HypeProperties props;
 
-    public ChatIngestRunner(TwitchIrcClient irc, VelocityTrackingService velocity, HypeProperties props) {
+    public ChatIngestRunner(TwitchIrcClient irc,
+                            VelocityTrackingService velocity,
+                            DeduplicationService dedup,
+                            DiscordNotifier discord,
+                            HypeProperties props) {
         this.irc = irc;
         this.velocity = velocity;
+        this.dedup = dedup;
+        this.discord = discord;
         this.props = props;
     }
 
@@ -35,9 +46,19 @@ public class ChatIngestRunner implements ApplicationRunner {
 
     private void onChatMessage(ChatEvent event) {
         log.debug("[{}] {}: {}", event.channelId(), event.userId(), event.message());
+        velocity.evaluate(event).ifPresent(this::onSpike);
+    }
 
-        velocity.evaluate(event).ifPresent(spike ->
-                log.info("SPIKE in #{} - {} messages in {}s", spike.channelId(),
-                        spike.recentCount(), props.getRecentSeconds()));
+    private void onSpike(SpikeSignal spike) {
+        // The whole burst looks like a spike, so only the first one through
+        // the lock gets to do anything about it.
+        if (!dedup.acquireClipLock(spike.channelId())) {
+            return;
+        }
+
+        log.info("SPIKE in #{} - {} messages in {}s (baseline {})",
+                spike.channelId(), spike.recentCount(), props.getRecentSeconds(), spike.baselineCount());
+
+        discord.sendSpike(spike.channelId(), spike.recentCount(), props.getRecentSeconds());
     }
 }
