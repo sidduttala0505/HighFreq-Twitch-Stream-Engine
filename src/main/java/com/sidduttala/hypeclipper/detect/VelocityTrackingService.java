@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -32,7 +33,11 @@ public class VelocityTrackingService {
         this.props = props;
     }
 
-    public boolean isSpike(ChatEvent event) {
+    /**
+     * Records the message and reports a spike if this one tipped chat over.
+     * Returns empty the vast majority of the time.
+     */
+    public Optional<SpikeSignal> evaluate(ChatEvent event) {
         long windowMs = props.getWindowSeconds() * 1000L;
         long recentMs = props.getRecentSeconds() * 1000L;
 
@@ -67,7 +72,7 @@ public class VelocityTrackingService {
         // louder than the nothing that came before it. Sit out one window.
         long since = watchingSince.computeIfAbsent(event.channelId(), c -> now);
         if (now - since < windowMs) {
-            return false;
+            return Optional.empty();
         }
 
         // Baseline is the period *before* the recent slice, not the whole window.
@@ -77,8 +82,12 @@ public class VelocityTrackingService {
         int baselineSeconds = props.getWindowSeconds() - props.getRecentSeconds();
         double expectedRecent = (baseline / (double) baselineSeconds) * props.getRecentSeconds();
 
-        return recent >= props.getMinMessages()
+        boolean spike = recent >= props.getMinMessages()
                 && recent >= props.getSpikeMultiplier() * Math.max(expectedRecent, 1.0);
+
+        return spike
+                ? Optional.of(new SpikeSignal(event.channelId(), recent, baseline, now))
+                : Optional.empty();
     }
 
     private static long asLong(Object o) {

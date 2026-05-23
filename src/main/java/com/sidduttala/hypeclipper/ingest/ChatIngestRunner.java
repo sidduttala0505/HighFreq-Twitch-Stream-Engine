@@ -36,8 +36,8 @@ public class ChatIngestRunner implements ApplicationRunner {
     private void onChatMessage(ChatEvent event) {
         log.debug("[{}] {}: {}", event.channelId(), event.userId(), event.message());
 
-        if (velocity.isSpike(event)) {
-            log.info("SPIKE in #{}", event.channelId());
-        }
+        velocity.evaluate(event).ifPresent(spike ->
+                log.info("SPIKE in #{} - {} messages in {}s", spike.channelId(),
+                        spike.recentCount(), props.getRecentSeconds()));
     }
 }
