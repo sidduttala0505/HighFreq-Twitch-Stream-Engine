@@ -1,5 +1,6 @@
 package com.sidduttala.hypeclipper.ingest;
 
+import com.sidduttala.hypeclipper.audit.AuditLogService;
 import com.sidduttala.hypeclipper.config.HypeProperties;
 import com.sidduttala.hypeclipper.detect.DeduplicationService;
 import com.sidduttala.hypeclipper.detect.SpikeSignal;
@@ -24,17 +25,20 @@ public class ChatIngestRunner implements ApplicationRunner {
     private final VelocityTrackingService velocity;
     private final DeduplicationService dedup;
     private final DiscordNotifier discord;
+    private final AuditLogService audit;
     private final HypeProperties props;
 
     public ChatIngestRunner(TwitchIrcClient irc,
                             VelocityTrackingService velocity,
                             DeduplicationService dedup,
                             DiscordNotifier discord,
+                            AuditLogService audit,
                             HypeProperties props) {
         this.irc = irc;
         this.velocity = velocity;
         this.dedup = dedup;
         this.discord = discord;
+        this.audit = audit;
         this.props = props;
     }
 
@@ -60,5 +64,6 @@ public class ChatIngestRunner implements ApplicationRunner {
                 spike.channelId(), spike.recentCount(), props.getRecentSeconds(), spike.baselineCount());
 
         discord.sendSpike(spike.channelId(), spike.recentCount(), props.getRecentSeconds());
+        audit.record(spike, null);
     }
 }
