@@ -7,6 +7,13 @@ spring:
     redis:
       host: localhost
       port: 6379
+  datasource:
+    url: jdbc:postgresql://localhost:5432/hypeclipper
+    username: hype
+    password: hype
+  sql:
+    init:
+      mode: always
 
 hype:
   # lowercase twitch login, no leading '#'
