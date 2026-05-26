@@ -16,6 +16,9 @@ public class HypeProperties {
     /** Lowercase twitch login of the channel to watch. */
     private String channel = "caedrel";
 
+    /** Kafka topic the raw chat events land on. */
+    private String topic = "twitch.chat";
+
     /** Full sliding window, in seconds. */
     private int windowSeconds = 30;
 
@@ -37,6 +40,14 @@ public class HypeProperties {
 
     public void setChannel(String channel) {
         this.channel = channel;
+    }
+
+    public String getTopic() {
+        return topic;
+    }
+
+    public void setTopic(String topic) {
+        this.topic = topic;
     }
 
     public int getWindowSeconds() {
