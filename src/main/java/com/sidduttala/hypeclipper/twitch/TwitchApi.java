@@ -2,6 +2,7 @@ package com.sidduttala.hypeclipper.twitch;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -41,6 +42,15 @@ public class TwitchApi {
 
     public TwitchApi(ObjectMapper json) {
         this.json = json;
+    }
+
+    @PostConstruct
+    void reportConfig() {
+        if (isConfigured()) {
+            log.info("twitch credentials found, clip creation is on");
+        } else {
+            log.warn("TWITCH_CLIENT_ID / TWITCH_USER_TOKEN not set - spikes will alert but not clip");
+        }
     }
 
     public boolean isConfigured() {
