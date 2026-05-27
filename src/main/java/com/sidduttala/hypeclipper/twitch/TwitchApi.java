@@ -1,0 +1,94 @@
+package com.sidduttala.hypeclipper.twitch;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+/**
+ * Thin wrapper over the bits of the Twitch Helix API this project needs.
+ *
+ * Both calls here need a user access token (the same one clip creation needs),
+ * not an app token.
+ */
+@Component
+public class TwitchApi {
+
+    private static final Logger log = LoggerFactory.getLogger(TwitchApi.class);
+
+    private static final String HELIX = "https://api.twitch.tv/helix";
+
+    private final HttpClient http = HttpClient.newHttpClient();
+    private final ObjectMapper json;
+
+    /** A login's numeric id never changes, so there's no reason to ask twice. */
+    private final Map<String, String> broadcasterIds = new ConcurrentHashMap<>();
+
+    @Value("${TWITCH_CLIENT_ID:}")
+    private String clientId;
+
+    @Value("${TWITCH_USER_TOKEN:}")
+    private String userToken;
+
+    public TwitchApi(ObjectMapper json) {
+        this.json = json;
+    }
+
+    public boolean isConfigured() {
+        return !clientId.isBlank() && !userToken.isBlank();
+    }
+
+    /** Numeric broadcaster id for a login, or null if Twitch doesn't know it. */
+    public String getBroadcasterId(String login) throws Exception {
+        String cached = broadcasterIds.get(login);
+        if (cached != null) {
+            return cached;
+        }
+
+        HttpResponse<String> res = send(authed(HELIX + "/users?login=" + login).GET().build());
+        JsonNode data = json.readTree(res.body()).path("data");
+        if (data.isEmpty()) {
+            log.warn("twitch doesn't know a channel called '{}' ({}): {}", login, res.statusCode(), res.body());
+            return null;
+        }
+
+        String id = data.get(0).path("id").asText();
+        broadcasterIds.put(login, id);
+        return id;
+    }
+
+    /**
+     * Clip creation only works on a live stream, so check before burning a
+     * call on it. An offline channel returns an empty data array.
+     */
+    public boolean isLive(String login) throws Exception {
+        HttpResponse<String> res = send(authed(HELIX + "/streams?user_login=" + login).GET().build());
+        return !json.readTree(res.body()).path("data").isEmpty();
+    }
+
+    private HttpRequest.Builder authed(String url) {
+        return HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("Authorization", "Bearer " + userToken)
+                .header("Client-Id", clientId);
+    }
+
+    private HttpResponse<String> send(HttpRequest req) throws Exception {
+        HttpResponse<String> res = http.send(req, HttpResponse.BodyHandlers.ofString());
+        if (res.statusCode() == 401) {
+            // User tokens only last a few hours - this one bit me a lot.
+            throw new IllegalStateException("Twitch says 401. TWITCH_USER_TOKEN has probably expired, "
+                    + "re-run: twitch token -u -s 'clips:edit'");
+        }
+        return res;
+    }
+}
