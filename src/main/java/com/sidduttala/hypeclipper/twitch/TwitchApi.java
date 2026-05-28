@@ -28,6 +28,11 @@ public class TwitchApi {
 
     private static final String HELIX = "https://api.twitch.tv/helix";
 
+    // ~16s of patience. Clips usually land in 4-6s; much past this and the
+    // moment is stale anyway.
+    private static final int POLL_ATTEMPTS = 8;
+    private static final long POLL_INTERVAL_MS = 2000;
+
     private final HttpClient http = HttpClient.newHttpClient();
     private final ObjectMapper json;
 
@@ -104,6 +109,31 @@ public class TwitchApi {
             throw new IllegalStateException("clip create returned no id: " + res.body());
         }
         return data.get(0).path("id").asText();
+    }
+
+    /**
+     * Waits for Twitch to finish rendering the clip and hands back the URL.
+     *
+     * The clip exists as soon as create returns, but its `url` is blank until
+     * processing finishes - reading it straight away just gets you an empty
+     * string, which is what I was posting to Discord for an embarrassing
+     * number of attempts.
+     */
+    public String waitForClipUrl(String clipId) throws Exception {
+        for (int attempt = 0; attempt < POLL_ATTEMPTS; attempt++) {
+            Thread.sleep(POLL_INTERVAL_MS);
+
+            HttpResponse<String> res = send(authed(HELIX + "/clips?id=" + clipId).GET().build());
+            JsonNode data = json.readTree(res.body()).path("data");
+            if (!data.isEmpty()) {
+                String url = data.get(0).path("url").asText("");
+                if (!url.isBlank()) {
+                    log.info("clip {} ready after {} polls", clipId, attempt + 1);
+                    return url;
+                }
+            }
+        }
+        throw new IllegalStateException("clip " + clipId + " never finished processing");
     }
 
     private HttpRequest.Builder authed(String url) {
