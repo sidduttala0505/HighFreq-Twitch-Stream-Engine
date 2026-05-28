@@ -85,6 +85,27 @@ public class TwitchApi {
         return !json.readTree(res.body()).path("data").isEmpty();
     }
 
+    /**
+     * Asks Twitch to cut a clip of roughly the last 30 seconds of the given
+     * live channel. Returns the clip id - the clip is not ready yet.
+     */
+    public String createClip(String broadcasterId) throws Exception {
+        HttpResponse<String> res = send(authed(HELIX + "/clips?broadcaster_id=" + broadcasterId)
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build());
+
+        // 202 Accepted, not 200 - Twitch has taken the job, not finished it.
+        if (res.statusCode() != 202) {
+            throw new IllegalStateException("clip create failed (" + res.statusCode() + "): " + res.body());
+        }
+
+        JsonNode data = json.readTree(res.body()).path("data");
+        if (data.isEmpty()) {
+            throw new IllegalStateException("clip create returned no id: " + res.body());
+        }
+        return data.get(0).path("id").asText();
+    }
+
     private HttpRequest.Builder authed(String url) {
         return HttpRequest.newBuilder()
                 .uri(URI.create(url))
