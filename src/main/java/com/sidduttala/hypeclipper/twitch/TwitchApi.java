@@ -99,6 +99,17 @@ public class TwitchApi {
                 .POST(HttpRequest.BodyPublishers.noBody())
                 .build());
 
+        // The two that actually happen in practice, worth their own messages
+        // because "clip create failed (404)" tells you nothing at 1am.
+        if (res.statusCode() == 404) {
+            throw new ClipUnavailableException("channel is not live (or has clips disabled)");
+        }
+        if (res.statusCode() == 429) {
+            // This limit is global across every app using the Helix clip
+            // endpoint, so it can trip even when we've barely called it.
+            throw new ClipUnavailableException("rate limited by twitch, backing off");
+        }
+
         // 202 Accepted, not 200 - Twitch has taken the job, not finished it.
         if (res.statusCode() != 202) {
             throw new IllegalStateException("clip create failed (" + res.statusCode() + "): " + res.body());
