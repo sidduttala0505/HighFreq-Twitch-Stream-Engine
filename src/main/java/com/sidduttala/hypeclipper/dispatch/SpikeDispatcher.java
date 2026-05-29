@@ -5,6 +5,7 @@ import com.sidduttala.hypeclipper.config.HypeProperties;
 import com.sidduttala.hypeclipper.detect.DeduplicationService;
 import com.sidduttala.hypeclipper.detect.SpikeSignal;
 import com.sidduttala.hypeclipper.notify.DiscordNotifier;
+import com.sidduttala.hypeclipper.twitch.ClipUnavailableException;
 import com.sidduttala.hypeclipper.twitch.TwitchApi;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,6 +60,10 @@ public class SpikeDispatcher {
 
         try {
             clipUrl = clip(channel);
+        } catch (ClipUnavailableException e) {
+            // Normal operating conditions, not a bug. Don't want these
+            // showing up as warnings and training me to ignore warnings.
+            log.info("no clip for #{}: {}", channel, e.getMessage());
         } catch (Exception e) {
             log.warn("clip failed for #{}: {}", channel, e.getMessage());
         }
