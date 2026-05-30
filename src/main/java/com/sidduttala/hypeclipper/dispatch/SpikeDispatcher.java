@@ -108,6 +108,10 @@ public class SpikeDispatcher {
         // and an offline channel already comes back as a 404 I handle. Same
         // reason the broadcaster id is resolved at startup instead of now.
         String broadcasterId = twitch.getBroadcasterId(channel);
+        if (broadcasterId == null) {
+            throw new ClipUnavailableException("no broadcaster id for " + channel);
+        }
+
         String clipId = twitch.createClip(broadcasterId);
         return twitch.waitForClipUrl(clipId);
     }

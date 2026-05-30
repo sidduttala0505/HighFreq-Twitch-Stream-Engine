@@ -1,6 +1,6 @@
 # Live Twitch Hype-Spike Clipper
 
-Watches a live Twitch channel's chat, notices the moment chat loses it, and cuts a real Twitch clip of the last ~30 seconds — then drops the link in Discord. Usually all of it inside about 8 seconds of the play happening.
+Watches a live Twitch channel's chat, notices the moment chat loses it, and cuts a real Twitch clip of the last ~30 seconds — then drops the link in Discord. Detection lands within a second of the burst; the rest is however long Twitch takes to render the clip.
 
 ![demo](docs/demo.gif)
 
