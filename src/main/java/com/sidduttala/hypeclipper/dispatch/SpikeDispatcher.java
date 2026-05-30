@@ -7,6 +7,7 @@ import com.sidduttala.hypeclipper.detect.SpikeSignal;
 import com.sidduttala.hypeclipper.notify.DiscordNotifier;
 import com.sidduttala.hypeclipper.twitch.ClipUnavailableException;
 import com.sidduttala.hypeclipper.twitch.TwitchApi;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -79,16 +80,33 @@ public class SpikeDispatcher {
         audit.record(spike, clipUrl);
     }
 
+    /**
+     * Warm the id cache and say up front whether the channel is even live, so
+     * neither of those calls is sitting on the clip path later.
+     */
+    @PostConstruct
+    void warmUp() {
+        if (!twitch.isConfigured()) {
+            return;
+        }
+        try {
+            String channel = props.getChannel();
+            twitch.getBroadcasterId(channel);
+            log.info("#{} live right now: {}", channel, twitch.isLive(channel));
+        } catch (Exception e) {
+            log.warn("couldn't reach twitch at startup: {}", e.getMessage());
+        }
+    }
+
     private String clip(String channel) throws Exception {
         if (!twitch.isConfigured()) {
             return null;
         }
-        // Creating a clip on an offline channel just 404s, so don't bother.
-        if (!twitch.isLive(channel)) {
-            log.info("#{} isn't live, alert only", channel);
-            return null;
-        }
 
+        // Deliberately no isLive() check here. The clip window is only ~30s
+        // wide and every round trip before the POST is window I'm spending -
+        // and an offline channel already comes back as a 404 I handle. Same
+        // reason the broadcaster id is resolved at startup instead of now.
         String broadcasterId = twitch.getBroadcasterId(channel);
         String clipId = twitch.createClip(broadcasterId);
         return twitch.waitForClipUrl(clipId);
