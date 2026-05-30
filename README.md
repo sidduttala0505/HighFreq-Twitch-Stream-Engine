@@ -4,7 +4,7 @@ Watches a live Twitch channel's chat, notices the moment chat loses it, and cuts
 
 ![demo](docs/demo.gif)
 
-> Replace `docs/demo.gif` with a screen recording: streamer hits a big play → console logs the spike → clip link lands in Discord → click it and it plays.
+*A real run against a live channel at default thresholds — chat streaming in off the IRC socket, then the detector firing the moment a burst clears 3× the baseline rate.*
 
 ## How it works
 
